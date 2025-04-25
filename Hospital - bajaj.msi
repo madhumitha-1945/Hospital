@@ -1,0 +1,148 @@
+
+import React, { useEffect, useState, useMemo } from 'react';
+import axios from 'axios';
+import { useSearchParams } from 'react-router-dom';
+
+const API_URL = 'https://srijandubey.github.io/campus-api-mock/SRM-C1-25.json';
+
+const DoctorListing = () => {
+  const [doctors, setDoctors] = useState([]);
+  const [filteredDoctors, setFilteredDoctors] = useState([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [consultType, setConsultType] = useState(searchParams.get('consultType') || '');
+  const [specialties, setSpecialties] = useState(searchParams.getAll('specialties'));
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') || '');
+
+  useEffect(() => {
+    axios.get(API_URL).then(res => setDoctors(res.data));
+  }, []);
+
+  useEffect(() => {
+    let filtered = [...doctors];
+
+    if (searchTerm) {
+      filtered = filtered.filter(d =>
+        d.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (consultType) {
+      filtered = filtered.filter(d => d.consultationType === consultType);
+    }
+
+    if (specialties.length) {
+      filtered = filtered.filter(d =>
+        specialties.some(spec => d.specialties.includes(spec))
+      );
+    }
+
+    if (sortBy === 'fees') {
+      filtered.sort((a, b) => a.fees - b.fees);
+    } else if (sortBy === 'experience') {
+      filtered.sort((a, b) => b.experience - a.experience);
+    }
+
+    setFilteredDoctors(filtered);
+  }, [doctors, searchTerm, consultType, specialties, sortBy]);
+
+  useEffect(() => {
+    const params = {};
+    if (searchTerm) params.search = searchTerm;
+    if (consultType) params.consultType = consultType;
+    if (specialties.length) params.specialties = specialties;
+    if (sortBy) params.sort = sortBy;
+    setSearchParams(params);
+  }, [searchTerm, consultType, specialties, sortBy]);
+
+  const handleSearch = (e) => {
+    setSearchTerm(e.target.value);
+    if (e.target.value.length) {
+      const matches = doctors.filter(d =>
+        d.name.toLowerCase().includes(e.target.value.toLowerCase())
+      ).slice(0, 3);
+      setSuggestions(matches);
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const handleSuggestionClick = (name) => {
+    setSearchTerm(name);
+    setSuggestions([]);
+  };
+
+  const specialtiesList = useMemo(() => {
+    const set = new Set();
+    doctors.forEach(d => d.specialties.forEach(spec => set.add(spec)));
+    return [...set];
+  }, [doctors]);
+
+  return (
+    <div>
+      <input
+        data-testid="autocomplete-input"
+        type="text"
+        value={searchTerm}
+        onChange={handleSearch}
+        onKeyDown={(e) => e.key === 'Enter' && setSuggestions([])}
+        placeholder="Search doctor by name"
+      />
+      {suggestions.length > 0 && (
+        <ul>
+          {suggestions.map((s, i) => (
+            <li
+              key={i}
+              data-testid="suggestion-item"
+              onClick={() => handleSuggestionClick(s.name)}
+            >
+              {s.name}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div>
+        <h3 data-testid="filter-header-moc">Consultation Mode</h3>
+        <label><input data-testid="filter-video-consult" type="radio" name="consultType" value="Video Consult" onChange={(e) => setConsultType(e.target.value)} checked={consultType === 'Video Consult'} /> Video Consult</label>
+        <label><input data-testid="filter-in-clinic" type="radio" name="consultType" value="In Clinic" onChange={(e) => setConsultType(e.target.value)} checked={consultType === 'In Clinic'} /> In Clinic</label>
+      </div>
+
+      <div>
+        <h3 data-testid="filter-header-speciality">Speciality</h3>
+        {specialtiesList.map((spec, i) => (
+          <label key={i}>
+            <input
+              data-testid={`filter-specialty-${spec.replaceAll('/', '-').replaceAll(' ', '-')}`}
+              type="checkbox"
+              checked={specialties.includes(spec)}
+              onChange={() => {
+                setSpecialties(prev => prev.includes(spec) ? prev.filter(s => s !== spec) : [...prev, spec]);
+              }}
+            /> {spec}
+          </label>
+        ))}
+      </div>
+
+      <div>
+        <h3 data-testid="filter-header-sort">Sort</h3>
+        <label><input data-testid="sort-fees" type="radio" name="sort" value="fees" onChange={(e) => setSortBy(e.target.value)} checked={sortBy === 'fees'} /> Fees (Low to High)</label>
+        <label><input data-testid="sort-experience" type="radio" name="sort" value="experience" onChange={(e) => setSortBy(e.target.value)} checked={sortBy === 'experience'} /> Experience (High to Low)</label>
+      </div>
+
+      <div>
+        {filteredDoctors.map((d, i) => (
+          <div key={i} data-testid="doctor-card">
+            <div data-testid="doctor-name">{d.name}</div>
+            <div data-testid="doctor-specialty">{d.specialties.join(', ')}</div>
+            <div data-testid="doctor-experience">{d.experience} years</div>
+            <div data-testid="doctor-fee">₹{d.fees}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default DoctorListing;
